@@ -3,6 +3,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Mine Roster</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f0c0a">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mine Roster">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <script src="https://cdn.tailwindcss.com"></script>
@@ -52,6 +59,7 @@
     background: radial-gradient(ellipse 90% 420px at 50% 0, hsl(0 70% 16% / 0.55), transparent), hsl(var(--background));
     background-attachment: fixed;
     color: hsl(var(--foreground)); font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+    padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
   }
   h1, h2, h3 { text-wrap: balance; font-family: Cinzel, "Trajan Pro", Georgia, serif; letter-spacing: 0.02em; }
   h1 { color: hsl(var(--primary)); text-shadow: 0 1px 0 hsl(0 70% 12%); }
