@@ -1,0 +1,78 @@
+{
+  "createdAt": 2,
+  "description": "Dot and kite: priest, three healers, two Neph mages.",
+  "name": "Dot Snare Group",
+  "seats": [
+    {
+      "label": "Elf Priest",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Elf Druid (max dmg) · Healer",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Neph Channeler · Healer",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Fessor · Healer",
+      "sizes": [
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Bard · Neph Mage",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Neph Mage Wizard / Sin / Doomy",
+      "sizes": [
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Prelate",
+      "sizes": [
+        10
+      ]
+    },
+    {
+      "label": "Neph Channeler · Healer",
+      "sizes": [
+        10
+      ]
+    },
+    {
+      "label": "Neph Mage Sin",
+      "sizes": [
+        10
+      ]
+    },
+    {
+      "label": "Human Crusader",
+      "sizes": [
+        10
+      ]
+    }
+  ],
+  "strategy": "Dot, then run. The priest must stay back and only clear debuffs; the bard can help.\nMake sure everyone takes Commander so we have enough clear stun.\nIf we have a Doomy, the Doomy buffs the Druid and the priest with the damage buff."
+}

@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mine Roster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  const c = (v) => `hsl(var(--${v}) / <alpha-value>)`;
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Geist', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          mono: ['"Geist Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+        },
+        colors: {
+          border: c('border'), input: c('input'), ring: c('ring'),
+          background: c('background'), foreground: c('foreground'),
+          primary: { DEFAULT: c('primary'), foreground: c('primary-foreground') },
+          secondary: { DEFAULT: c('secondary'), foreground: c('secondary-foreground') },
+          muted: { DEFAULT: c('muted'), foreground: c('muted-foreground') },
+          accent: { DEFAULT: c('accent'), foreground: c('accent-foreground') },
+          destructive: { DEFAULT: c('destructive'), foreground: c('destructive-foreground') },
+          card: { DEFAULT: c('card'), foreground: c('card-foreground') },
+          success: c('success'), warn: c('warn'),
+        },
+        borderRadius: { lg: 'var(--radius)', md: 'calc(var(--radius) - 2px)', sm: 'calc(var(--radius) - 4px)' },
+      },
+    },
+  };
+</script>
+<style>
+  /* Shadowbane: soot-black stone, aged gold trim, blood crimson. One dark look on purpose, in either viewer theme. */
+  :root {
+    color-scheme: dark;
+    --background: 20 18% 5%; --foreground: 38 32% 86%;
+    --card: 22 16% 8%; --card-foreground: 38 32% 86%;
+    --primary: 40 58% 52%; --primary-foreground: 22 35% 7%;
+    --secondary: 0 45% 20%; --secondary-foreground: 38 40% 88%;
+    --muted: 22 14% 13%; --muted-foreground: 34 16% 60%;
+    --accent: 22 16% 16%; --accent-foreground: 38 32% 90%;
+    --destructive: 0 68% 48%; --destructive-foreground: 38 40% 94%;
+    --border: 30 24% 19%; --input: 30 24% 24%; --ring: 40 58% 52%;
+    --success: 88 38% 52%; --warn: 30 88% 56%;
+    --radius: 0.375rem;
+    --tier-3: #f5d90a; --tier-5: #f59e0b; --tier-10: #8b3dff; --tier-hz: #3d85c6;
+  }
+  * { border-color: hsl(var(--border)); }
+  body {
+    background: radial-gradient(ellipse 90% 420px at 50% 0, hsl(0 70% 16% / 0.55), transparent), hsl(var(--background));
+    background-attachment: fixed;
+    color: hsl(var(--foreground)); font-family: Geist, ui-sans-serif, system-ui, sans-serif;
+  }
+  h1, h2, h3 { text-wrap: balance; font-family: Cinzel, "Trajan Pro", Georgia, serif; letter-spacing: 0.02em; }
+  h1 { color: hsl(var(--primary)); text-shadow: 0 1px 0 hsl(0 70% 12%); }
+  details > summary { list-style: none; cursor: pointer; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(90deg); }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div id="root" class="px-4 py-6 sm:py-10">
+  <p class="mx-auto max-w-3xl text-sm" style="color: hsl(var(--muted-foreground))">Loading roster…</p>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+<script>
+const { useState, useEffect, useMemo } = React;
+// Firebase web config is public by design; firestore.rules decides what anyone can write.
+const FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyBrOEEO6_rpF7bFJV32IYYmULJf9qpn-PM',
+  authDomain: 'sb-mine.firebaseapp.com',
+  projectId: 'sb-mine',
+  storageBucket: 'sb-mine.firebasestorage.app',
+  messagingSenderId: '563774460265',
+  appId: '1:563774460265:web:f4ab294dcad7fc814b2df8',
+};
+const html = htm.bind(React.createElement);
+const cn = (...a) => a.filter(Boolean).join(' ');
+
+const MIN_PER_SEAT = 2, MAX_PER_SEAT = 3, MAX_SECONDARY = 5;
+
+// ---------- shadcn/ui primitives (same class recipes as the generated components) ----------
+const btnBase = 'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50';
+const btnVariant = {
+  default: 'bg-primary text-primary-foreground shadow hover:bg-primary/90',
+  destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+  outline: 'border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground',
+  secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
+  ghost: 'hover:bg-accent hover:text-accent-foreground',
+};
+const btnSize = { default: 'h-9 px-4 py-2', sm: 'h-8 rounded-md px-3 text-xs', icon: 'h-7 w-7' };
+const Button = ({ variant = 'default', size = 'default', className, ...p }) =>
+  html`<button className=${cn(btnBase, btnVariant[variant], btnSize[size], className)} ...${p} />`;
+
+const Input = ({ className, ...p }) =>
+  html`<input className=${cn('flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm', className)} ...${p} />`;
+const Textarea = ({ className, ...p }) =>
+  html`<textarea className=${cn('flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-base shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring md:text-sm', className)} ...${p} />`;
+const Label = ({ className, ...p }) =>
+  html`<label className=${cn('text-sm font-medium leading-none', className)} ...${p} />`;
+
+const Card = ({ className, ...p }) => html`<div className=${cn('rounded-xl border bg-card text-card-foreground shadow-sm', className)} ...${p} />`;
+const CardHeader = ({ className, ...p }) => html`<div className=${cn('flex flex-col gap-1.5 p-4 sm:p-6', className)} ...${p} />`;
+const CardTitle = ({ className, ...p }) => html`<h3 className=${cn('font-semibold leading-none tracking-tight', className)} ...${p} />`;
+const CardDescription = ({ className, ...p }) => html`<p className=${cn('text-sm text-muted-foreground', className)} ...${p} />`;
+const CardContent = ({ className, ...p }) => html`<div className=${cn('p-4 pt-0 sm:p-6 sm:pt-0', className)} ...${p} />`;
+
+const badgeVariant = {
+  default: 'border-transparent bg-primary text-primary-foreground',
+  secondary: 'border-transparent bg-secondary text-secondary-foreground',
+  outline: 'text-foreground',
+  success: 'border-transparent bg-success/15 text-success',
+  warn: 'border-transparent bg-warn/15 text-warn',
+  destructive: 'border-transparent bg-destructive/15 text-destructive',
+};
+const Badge = ({ variant = 'default', className, ...p }) =>
+  html`<span className=${cn('inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold tabular-nums', badgeVariant[variant], className)} ...${p} />`;
+
+const Tabs = ({ value, onChange, items }) => html`
+  <div role="tablist" className="grid w-full grid-cols-2 gap-1 rounded-lg bg-muted p-1 text-muted-foreground sm:grid-cols-4">
+    ${items.map(([id, label, sub]) => html`
+      <button key=${id} id=${'tab-' + id} role="tab" aria-selected=${value === id} data-state=${value === id ? 'active' : 'inactive'}
+        onClick=${() => onChange(id)}
+        className="flex flex-col items-center justify-center rounded-md px-2 py-1.5 text-center text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow">
+        <span>${label}</span>
+        ${sub && html`<span className="font-mono text-[11px] font-normal tabular-nums text-muted-foreground">${sub}</span>`}
+      </button>`)}
+  </div>`;
+
+const X = () => html`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>`;
+const Chevron = () => html`<svg className="chev transition-transform" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+
+// ---------- mine schedule (US Eastern, from the officers' sheet) ----------
+const TIERS = {
+  3: { label: '3 Man', color: 'var(--tier-3)' },
+  5: { label: '5 Man', color: 'var(--tier-5)' },
+  10: { label: '10 Man', color: 'var(--tier-10)' },
+  hz: { label: 'Hotzone', color: 'var(--tier-hz)' },
+};
+const SCHEDULE = [
+  ['0:00', ['Valkos Wilds', 5], ['Derros Plains', 3]],
+  ['0:30', ['Tainted Swamp', 5]],
+  ['1:00', ['Sevaath Mere', 5]],
+  ['1:30', ['The Black Bog', 3]],
+  ['10:00', ['Ecklund Wilds', 5]],
+  ['10:30', ['Aedroch Highlands', 5]],
+  ['15:30', ['Western Battlegrounds', 5]],
+  ['16:00', ['Bone Marches', 5]],
+  ['16:30', ["Ymur's Crown", 5]],
+  ['17:00', ['Doomhorn Skrae', 5]],
+  ['17:30', ['Fellgrim Forest', 5]],
+  ['20:00', ['Kharsoom', 3]],
+  ['20:30', ['The Bloodsands', 3]],
+  ['21:00', ['Holloch Forest', 5]],
+  ['21:30', ['Ashfell Plain', 5], ['Vale of Nar Addad', 3]],
+  ['22:00', ['Plain of Ashes', 10], ['Ragnir Holm', 3]],
+  ['22:30', ['Pandemonium', 10], ['Aerath Hellendroth', 3]],
+  ['23:00', ['Vorg Hotzone', 'hz'], ['Vorg Hotzone', 'hz']],
+  ['23:30', ['Vorg Hotzone', 'hz'], ['Vorg Hotzone', 'hz']],
+];
+// Each timeline is a run of back-to-back windows, first and last start time in Eastern.
+const TIMELINES = [
+  { id: 'western', label: 'Western BG → Fellgrim', from: '15:30', to: '17:30' },
+  { id: 'kharsoom', label: 'Kharsoom → Plain of Ashes', from: '20:00', to: '22:00' },
+  { id: 'pandemonium', label: 'Pandemonium → Black Bog', from: '22:30', to: '1:30' },
+  { id: 'ecklund', label: 'Ecklund → Aedroch', from: '10:00', to: '10:30' },
+];
+const SLOT_MIN = 30;
+const SOURCE_TZ = 'America/New_York';
+const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+const hm = (t) => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+
+// Offset of a zone from UTC at a given instant, in minutes (EDT → -240).
+function zoneOffsetMin(tz, date) {
+  const name = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'longOffset' })
+    .formatToParts(date).find((p) => p.type === 'timeZoneName').value; // "GMT-04:00" or "GMT"
+  const m = name.match(/GMT([+-])(\d{2}):(\d{2})/);
+  return m ? (m[1] === '-' ? -1 : 1) * (Number(m[2]) * 60 + Number(m[3])) : 0;
+}
+// An Eastern wall-clock "H:MM" on today's Eastern date (+ dayOffset) → a real instant, so DST on either side is handled.
+function eastern(hhmm, dayOffset = 0) {
+  const [h, mi] = hhmm.split(':').map(Number);
+  const [y, mo, d] = new Intl.DateTimeFormat('en-CA', { timeZone: SOURCE_TZ, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(new Date()).split('-').map(Number);
+  const guess = Date.UTC(y, mo - 1, d + dayOffset, h, mi);
+  return new Date(guess - zoneOffsetMin(SOURCE_TZ, new Date(guess)) * 60000);
+}
+const fmtTime = (d) => d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+// Windows of a timeline in play order; ones after midnight land on the next day.
+function timelineRows(tl) {
+  const from = hm(tl.from), span = (hm(tl.to) - from + 1440) % 1440;
+  return SCHEDULE
+    .map(([t, ...mines]) => ({ t, mines, off: (hm(t) - from + 1440) % 1440 }))
+    .filter((r) => r.off <= span)
+    .sort((a, b) => a.off - b.off)
+    .map((r) => {
+      const start = eastern(r.t, hm(r.t) < from ? 1 : 0);
+      return { ...r, start, end: new Date(start.getTime() + SLOT_MIN * 60000) };
+    });
+}
+const timelineSizes = (rows) => [...new Set(rows.flatMap((r) => r.mines.map((m) => m[1])).filter((s) => s !== 'hz'))].sort((a, b) => a - b);
+
+// Most players a mine size allows, and which groups can run it.
+const MINE_CAP = { 3: 4, 5: 6, 10: 10 };
+const MINE_GROUPS = { 10: ['dot-snare', 'high-resist-caster'] };
+
+// A timeline splits into one section per mine size; everyone in a section plays all of its mines.
+const TL = TIMELINES.map((tl) => {
+  const rows = timelineRows(tl);
+  const mines = rows.flatMap((r) => r.mines.map(([name, size]) => ({ t: r.t, name, size, start: r.start })));
+  const sections = timelineSizes(rows).map((size) => ({ size, mines: mines.filter((m) => m.size === size) }))
+    .sort((a, b) => a.mines[0].start - b.mines[0].start || b.size - a.size);
+  for (const s of sections) {
+    s.overlaps = sections.filter((o) => o !== s).map((o) => ({ size: o.size, at: s.mines.filter((m) => o.mines.some((x) => x.t === m.t)).map((m) => m.start) }))
+      .filter((o) => o.at.length);
+  }
+  return { ...tl, rows, sections, sizes: timelineSizes(rows), start: rows[0].start, end: rows[rows.length - 1].end };
+});
+
+function useNow() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30000); return () => clearInterval(t); }, []);
+  return now;
+}
+
+function TimelineHeader({ tl }) {
+  const now = useNow();
+  return html`
+    <${Card}>
+      <${CardHeader}>
+        <${CardTitle} className="text-lg">${tl.label}<//>
+        <${CardDescription}>
+          <span className="font-mono tabular-nums text-foreground">${fmtTime(tl.start)} – ${fmtTime(tl.end)}</span> your time (${LOCAL_TZ.replace(/_/g, ' ')}).
+          ${' '}${tl.rows.length} back-to-back windows. Hover or tap a time for the Eastern original.
+        <//>
+        <div className="flex flex-wrap gap-2 pt-2">
+          ${[...tl.sizes, ...(tl.rows.some((r) => r.mines.some((m) => m[1] === 'hz')) ? ['hz'] : [])].map((s) => html`
+            <${Badge} key=${s} variant="outline" className="font-medium">
+              <span className="h-2 w-2 rounded-full" style=${{ background: TIERS[s].color }}></span>${TIERS[s].label}
+            <//>`)}
+        </div>
+      <//>
+      <${CardContent}>
+        <ol className="divide-y rounded-lg border">
+          ${tl.rows.map((r) => {
+            const live = now >= r.start && now < r.end;
+            return html`
+            <li key=${r.t} className=${cn('flex items-start gap-3 px-3 py-2', live && 'bg-muted/60')}>
+              <div className="w-[7.5rem] shrink-0 font-mono text-sm tabular-nums" title=${`${r.t} Eastern`}>
+                ${fmtTime(r.start)}<span className="text-muted-foreground">–${fmtTime(r.end)}</span>
+                ${live && html`<div><${Badge} variant="success" className="mt-1">Live now<//></div>`}
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-1 sm:flex-row sm:flex-wrap sm:gap-x-4">
+                ${r.mines.map(([name, tier], i) => html`
+                  <span key=${i} className="inline-flex items-center gap-2 text-sm">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style=${{ background: TIERS[tier].color }} title=${TIERS[tier].label}></span>
+                    <span>${name}</span>
+                    <span className="text-xs text-muted-foreground">${TIERS[tier].label}</span>
+                  </span>`)}
+              </div>
+            </li>`;
+          })}
+        </ol>
+      <//>
+    <//>`;
+}
+
+
+
+function HowItWorks() {
+  return html`
+    <details className="rounded-xl border bg-card px-4 py-3 text-card-foreground sm:px-6" open>
+      <summary className="flex items-center gap-1.5 text-sm font-semibold"><${Chevron} />How sign-up works</summary>
+      <ol className="mt-3 flex list-decimal flex-col gap-2 pl-5 text-sm leading-relaxed text-muted-foreground">
+        <li><span className="font-medium text-foreground">Enter your nickname once.</span> This browser remembers it.</li>
+        <li><span className="font-medium text-foreground">Pick a timeline tab.</span> Each tab is one night block. Its top card lists every mine and time in your time zone.</li>
+        <li><span className="font-medium text-foreground">Pick a section.</span> A timeline with only 5-man mines has one section. A timeline with 3, 5 and 10-man mines has a section for each size, and you play every mine in the section you join.</li>
+        <li><span className="font-medium text-foreground">Sign up for each group you'll play.</span> You can take up to 2 spots in each group: one <span className="font-medium text-foreground">Primary</span> and one <span className="font-medium text-foreground">Secondary</span>, or just one of them. Primaries fill a seat (${MIN_PER_SEAT}–${MAX_PER_SEAT} per seat). Once a seat has ${MAX_PER_SEAT} primaries it's full, and you can only join it as a secondary (up to ${MAX_SECONDARY} per seat).</li>
+        <li><span className="font-medium text-foreground">PvP ready only.</span> The first time you join a class, you confirm your character for it is rolled and ready for PvP. If it isn't, you don't get the seat.</li>
+        <li><span className="font-medium text-foreground">No double booking.</span> Sections that run at the same time are marked. You can be a primary in only one of them.</li>
+      </ol>
+    </details>`;
+}
+
+// ---------- roster ----------
+const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const ROLE = { primary: 'Primary', secondary: 'Secondary' };
+
+function Chip({ entry, mine, onLeave }) {
+  const secondary = entry.role === 'secondary';
+  return html`
+    <span className=${cn('inline-flex items-center gap-1 rounded-md border py-0.5 pl-2 text-xs font-semibold', secondary && 'border-dashed font-medium text-muted-foreground', mine ? 'border-primary/50 bg-primary/10 pr-0.5' : 'pr-2')}>
+      ${entry.player}
+      ${mine && html`<${Button} variant="ghost" size="icon" className="h-5 w-5" aria-label="Leave this seat" title="Leave" onClick=${() => onLeave(entry.id)}><${X} /><//>`}
+    </span>`;
+}
+
+function Seat({ seat, entries, name, free, blockPrimary, onJoin, onLeave }) {
+  const primaries = entries.filter((e) => e.role !== 'secondary');
+  const secondaries = entries.filter((e) => e.role === 'secondary');
+  const n = primaries.length;
+  const here = name && entries.some((e) => same(e.player, name));
+  const canPrimary = free.includes('primary') && n < MAX_PER_SEAT && !blockPrimary;
+  const canSecondary = free.includes('secondary') && secondaries.length < MAX_SECONDARY;
+  const why = !name ? 'Enter your nickname first'
+    : here ? "You're already on this seat"
+    : !free.length ? 'You already hold 2 spots in this group'
+    : null;
+  const status = n >= MAX_PER_SEAT ? ['success', 'Full · secondaries only']
+    : n >= MIN_PER_SEAT ? ['success', 'Covered']
+    : n === 0 ? ['destructive', `Needs ${MIN_PER_SEAT}`]
+    : ['warn', `Needs ${MIN_PER_SEAT - n}`];
+
+  return html`
+    <li className="flex flex-col gap-2 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-sm font-medium">${seat.label}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <${Badge} variant=${status[0]}>${status[1]}<//>
+            <span className="text-xs tabular-nums text-muted-foreground">${n}/${MAX_PER_SEAT} primary · ${secondaries.length}/${MAX_SECONDARY} secondary</span>
+          </div>
+        </div>
+        <div className="flex gap-1.5">
+          <${Button} size="sm" disabled=${!!why || !canPrimary} title=${why || (canPrimary ? 'Take this seat' : blockPrimary || (n >= MAX_PER_SEAT ? 'Seat is full' : 'You already have a primary in this group'))}
+            onClick=${() => onJoin('primary')}>Primary<//>
+          <${Button} size="sm" variant="outline" disabled=${!!why || !canSecondary} title=${why || (canSecondary ? 'Back up this seat' : secondaries.length >= MAX_SECONDARY ? 'No secondary spots left' : 'You already have a secondary in this group')}
+            onClick=${() => onJoin('secondary')}>Secondary<//>
+        </div>
+      </div>
+      ${primaries.length > 0 && html`
+        <div className="flex flex-wrap gap-1.5">${primaries.map((e) => html`<${Chip} key=${e.id} entry=${e} mine=${same(e.player, name)} onLeave=${onLeave} />`)}</div>`}
+      ${secondaries.length > 0 && html`
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Secondary</span>
+          ${secondaries.map((e) => html`<${Chip} key=${e.id} entry=${e} mine=${same(e.player, name)} onLeave=${onLeave} />`)}
+        </div>`}
+    </li>`;
+}
+
+const seatsFor = (group, size) => (group.seats || []).map((s, i) => ({ ...s, i })).filter((s) => s.sizes.includes(size)).slice(0, MINE_CAP[size]);
+
+function GroupRoster({ group, section, signups, name, blockPrimary, api }) {
+  const mine = name ? signups.filter((s) => same(s.player, name)) : [];
+  const free = ['primary', 'secondary'].filter((r) => !mine.some((s) => (s.role || 'primary') === r));
+  const seats = seatsFor(group, section.size);
+  const covered = seats.filter((s) => signups.filter((e) => e.seat === s.i && e.role !== 'secondary').length >= MIN_PER_SEAT).length;
+  return html`
+    <details className="rounded-lg border" open>
+      <summary className="flex flex-col gap-2 px-3 py-3 sm:px-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 font-semibold"><${Chevron} />${group.name}</span>
+          <${Badge} variant=${covered === seats.length ? 'success' : 'secondary'}>${covered}/${seats.length} seats covered<//>
+        </div>
+        ${name && html`
+          <div className="flex flex-wrap gap-1.5 pl-5">
+            ${['primary', 'secondary'].map((r) => {
+              const s = mine.find((x) => (x.role || 'primary') === r);
+              return html`<${Badge} key=${r} variant=${s ? (r === 'primary' ? 'default' : 'secondary') : 'outline'} className="font-medium">
+                ${ROLE[r]}: ${s ? (group.seats[s.seat] || {}).label : '—'}
+              <//>`;
+            })}
+          </div>`}
+      </summary>
+      <div className="flex flex-col gap-3 border-t px-3 pb-2 pt-3 sm:px-4">
+        ${group.description && html`<p className="text-sm text-muted-foreground">${group.description}</p>`}
+        ${group.strategy && html`
+          <details className="rounded-lg border bg-muted/40 px-3 py-2">
+            <summary className="flex items-center gap-1.5 text-sm font-medium"><${Chevron} />Strategy</summary>
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">${group.strategy}</p>
+          </details>`}
+        <ul className="divide-y">
+          ${seats.map((s) => html`
+            <${Seat} key=${s.i} seat=${s} entries=${signups.filter((e) => e.seat === s.i)}
+              name=${name} free=${free} blockPrimary=${blockPrimary}
+              onJoin=${(role) => api.join(section, group, s.i, role)} onLeave=${api.leave} />`)}
+        </ul>
+      </div>
+    </details>`;
+}
+
+function Section({ section, groups, signups, name, blockPrimary, api }) {
+  const allowed = groups.filter((g) => !MINE_GROUPS[section.size] || MINE_GROUPS[section.size].includes(g.id));
+  return html`
+    <${Card}>
+      <${CardHeader} className="gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <${CardTitle} className="flex items-center gap-2 text-lg">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full" style=${{ background: TIERS[section.size].color }}></span>
+            ${section.size}-man mines
+          <//>
+          <${Badge} variant="outline" className="font-medium">${MINE_CAP[section.size]} players per group<//>
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          ${section.mines.map((m, i) => html`
+            <span key=${i}><span className="font-mono tabular-nums text-muted-foreground" title=${`${m.t} Eastern`}>${fmtTime(m.start)}</span> ${m.name}</span>`)}
+        </div>
+        ${section.overlaps.map((o) => html`
+          <p key=${o.size} className="text-xs text-warn">Runs at the same time as the ${o.size}-man section at ${o.at.map(fmtTime).join(', ')}. You can be a primary in only one of them.</p>`)}
+        ${blockPrimary && html`<p className="text-xs font-medium text-warn">${blockPrimary} You can still join here as a secondary.</p>`}
+        <p className="text-sm text-muted-foreground">Sign up in as many groups as you like: a Primary, a Secondary, or both in each.</p>
+      <//>
+      <${CardContent} className="flex flex-col gap-2">
+        ${allowed.map((g) => html`<${GroupRoster} key=${g.id} group=${g} section=${section} name=${name} blockPrimary=${blockPrimary} api=${api}
+          signups=${signups.filter((s) => s.groupId === g.id)} />`)}
+      <//>
+    <//>`;
+}
+
+function ReadyDialog({ ask }) {
+  if (!ask) return null;
+  return html`
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 sm:items-center">
+      <div role="alertdialog" aria-modal="true" aria-labelledby="ready-title" aria-describedby="ready-desc"
+        className="flex w-full max-w-md flex-col gap-4 rounded-xl border bg-background p-6 shadow-lg">
+        <div className="flex flex-col gap-2">
+          <h2 id="ready-title" className="text-lg font-semibold">Is your ${ask.name} ready for PvP?</h2>
+          <p id="ready-desc" className="text-sm text-muted-foreground">Only characters that are already rolled and ready for PvP can take a seat. Your answer is saved in this browser, so you won't be asked again for this class.</p>
+        </div>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <${Button} variant="outline" onClick=${() => ask.resolve(false)}>Not yet, don't sign up<//>
+          <${Button} autoFocus onClick=${() => ask.resolve(true)}>Yes, it's ready<//>
+        </div>
+      </div>
+    </div>`;
+}
+
+function Profile({ name, setName }) {
+  const [editing, setEditing] = useState(!name);
+  const [draft, setDraft] = useState(name);
+  const save = (e) => { e.preventDefault(); if (draft.trim()) { setName(draft.trim()); setEditing(false); } };
+  return html`
+    <${Card}>
+      <${CardContent} className="pt-4 sm:pt-5">
+        ${editing
+          ? html`
+            <form className="flex flex-col gap-2 sm:flex-row sm:items-center" onSubmit=${save}>
+              <${Label} htmlFor="nickname" className="sm:w-24">Nickname<//>
+              <div className="flex flex-1 gap-2">
+                <${Input} id="nickname" placeholder="Your in-game nickname" value=${draft} onInput=${(e) => setDraft(e.target.value)} maxLength=${30} />
+                <${Button} type="submit" disabled=${!draft.trim()}>Enter<//>
+              </div>
+            </form>`
+          : html`
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Playing as</span>
+              <span className="font-semibold text-primary">${name}</span>
+              <${Button} size="sm" variant="ghost" onClick=${() => { setDraft(name); setEditing(true); }}>Change<//>
+            </div>`}
+      <//>
+    <//>`;
+}
+
+function errorText(e) {
+  if (e && e.code === 'permission-denied') return "The roster refused that change. Reload the page and try again.";
+  if (e && e.code === 'resource-exhausted') return "The roster hit today's free limit. Try again tomorrow.";
+  return 'That change did not save. Check your connection and try again.';
+}
+
+const READY_KEY = 'mine-roster:pvp-ready';
+const loadReady = () => { try { return JSON.parse(localStorage.getItem(READY_KEY) || '[]'); } catch { return []; } };
+
+function App() {
+  const NICK_KEY = 'mine-roster:nickname';
+  const [name, setNameState] = useState(() => { try { return localStorage.getItem(NICK_KEY) || ''; } catch { return ''; } });
+  const setName = (v) => { setNameState(v); try { localStorage.setItem(NICK_KEY, v); } catch {} };
+  const [ready, setReadyState] = useState(loadReady);
+  const setReady = (v) => { setReadyState(v); try { localStorage.setItem(READY_KEY, JSON.stringify(v)); } catch {} };
+  const [tab, setTab] = useState(TL[0].id);
+  const [db, setDb] = useState(undefined); // undefined = connecting, null = unavailable
+  const [groups, setGroups] = useState([]);
+  const [signups, setSignups] = useState([]);
+  const [error, setError] = useState('');
+  const [ask, setAsk] = useState(null);
+
+  useEffect(() => {
+    let unsubs = [];
+    const use = Promise.resolve().then(() => firebase.initializeApp(FIREBASE_CONFIG).firestore()).catch(() => null);
+    use.then((d) => {
+      setDb(d);
+      if (!d) return;
+      const rows = (snap) => snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      unsubs = [
+        d.collection('groups').orderBy('createdAt').onSnapshot((s) => setGroups(rows(s)), () => setError(errorText())),
+        d.collection('signups').orderBy('createdAt').onSnapshot((s) => setSignups(rows(s)), () => setError(errorText())),
+      ];
+    });
+    return () => unsubs.forEach((u) => u());
+  }, []);
+
+
+  const mySignups = name ? signups.filter((s) => same(s.player, name)) : [];
+  // A primary in a section that runs at the same time blocks primaries here.
+  const blockFor = (tl, section) => {
+    const clash = section.overlaps.find((o) => mySignups.some((s) => s.timeline === tl.id && s.section === o.size && s.role !== 'secondary'));
+    return clash ? `You're a primary in the ${clash.size}-man section, which runs at the same time.` : '';
+  };
+  const askReady = (charName) => new Promise((resolve) => setAsk({ name: charName, resolve: (v) => { setAsk(null); resolve(v); } }));
+
+  const run = async (fn) => {
+    setError('');
+    try { await fn(); return true; } catch (e) { setError(errorText(e)); return false; }
+  };
+  const api = {
+    // ponytail: limits are checked client-side, so two people joining the same seat at the same instant could make it 4; fine for a guild roster.
+    join: async (section, group, seat, role) => {
+      const inGroup = signups.filter((s) => s.timeline === section.tl && s.section === section.size && s.groupId === group.id);
+      const mine = inGroup.filter((s) => same(s.player, name));
+      const onSeat = inGroup.filter((s) => s.seat === seat);
+      if (mine.some((s) => (s.role || 'primary') === role)) { setError(`You already have a ${role} spot in this group.`); return false; }
+      if (role === 'primary' && onSeat.filter((s) => s.role !== 'secondary').length >= MAX_PER_SEAT) { setError('That seat just filled up. You can still join as a secondary.'); return false; }
+      if (role === 'secondary' && onSeat.filter((s) => s.role === 'secondary').length >= MAX_SECONDARY) { setError('That seat has no secondary spots left.'); return false; }
+      const label = group.seats[seat].label;
+      if (!ready.includes(label)) {
+        if (!(await askReady(label))) return false;
+        setReady([...ready, label]);
+      }
+      return run(() => db.collection('signups').add({ timeline: section.tl, section: section.size, groupId: group.id, seat, role, player: name, createdAt: Date.now() }));
+    },
+    leave: (id) => run(() => db.doc('signups/' + id).delete()),
+  };
+
+  const tl = TL.find((t) => t.id === tab);
+  const single = tl.sections.length === 1;
+
+  return html`
+    <main className="mx-auto flex max-w-3xl flex-col gap-6">
+      <header>
+        <p className="text-xs font-medium tracking-[0.2em] text-destructive">-x- Mine Monster</p>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Mine Roster</h1>
+      </header>
+
+      <${Profile} name=${name} setName=${setName} />
+      <${HowItWorks} />
+
+      <${Tabs} value=${tab} onChange=${setTab} items=${TL.map((t) => {
+        const n = mySignups.filter((s) => s.timeline === t.id).length;
+        return [t.id, t.label, `${fmtTime(t.start)} – ${fmtTime(t.end)}${n ? ` · you ×${n}` : ''}`];
+      })} />
+
+      ${error && html`
+        <div role="alert" className="flex items-start justify-between gap-3 rounded-lg border border-destructive/50 px-4 py-3 text-sm text-destructive">
+          <span>${error}</span>
+          <${Button} variant="ghost" size="icon" aria-label="Dismiss" onClick=${() => setError('')}><${X} /><//>
+        </div>`}
+
+      <${TimelineHeader} tl=${tl} />
+
+      ${db === undefined && html`<p className="text-sm text-muted-foreground">Connecting to the shared roster…</p>`}
+      ${db === null && html`
+        <${Card}><${CardHeader}>
+          <${CardTitle}>Roster unavailable here<//>
+          <${CardDescription}>Couldn't reach the roster database. Check your connection and reload. The mine times above still work.<//>
+        <//><//>`}
+
+      ${db && html`
+        <div className="flex flex-col gap-4">
+          ${!single && html`<p className="text-sm text-muted-foreground">This timeline mixes mine sizes, so it has ${tl.sections.length} sections. Each section covers every mine of that size in this timeline.</p>`}
+          ${tl.sections.map((sec) => {
+            const section = { ...sec, tl: tl.id, key: `${tl.id}-${sec.size}` };
+            return html`<${Section} key=${section.key} section=${section} groups=${groups} name=${name} api=${api}
+              blockPrimary=${blockFor(tl, sec)} signups=${signups.filter((s) => s.timeline === tl.id && s.section === sec.size)} />`;
+          })}
+        </div>`}
+
+      <${ReadyDialog} ask=${ask} />
+    </main>`;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+</script>

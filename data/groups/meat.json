@@ -1,0 +1,48 @@
+{
+  "createdAt": 1,
+  "description": "Melee pressure: 2 Elf Priests, 3 Aracoix STR barbs/warriors (resist ring / necklace), 1 bard.",
+  "name": "Meat Group",
+  "seats": [
+    {
+      "label": "Elf Priest",
+      "sizes": [
+        3,
+        5
+      ]
+    },
+    {
+      "label": "Elf Priest",
+      "sizes": [
+        5
+      ]
+    },
+    {
+      "label": "Aracoix Warrior · Throwing Hammer",
+      "sizes": [
+        3,
+        5
+      ]
+    },
+    {
+      "label": "Aracoix Barb/Warrior · Great Axe",
+      "sizes": [
+        3,
+        5
+      ]
+    },
+    {
+      "label": "Aracoix Barb/Warrior · Great Hammer or Great Axe",
+      "sizes": [
+        5
+      ]
+    },
+    {
+      "label": "Bard · Human Mage (CON)",
+      "sizes": [
+        3,
+        5
+      ]
+    }
+  ],
+  "strategy": "Either rush in and split DPS over 2 units (either both priests, or the 2 highest DPS), blocking them.\nA few must have Commander for clear stun."
+}

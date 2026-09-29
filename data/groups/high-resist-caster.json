@@ -1,0 +1,78 @@
+{
+  "createdAt": 3,
+  "description": "Caster group with heavy debuffs: Elf Priest, Bard, Neph Wizard, Neph Sin, Neph Channeler, Elf Druid.",
+  "name": "High Resist Caster",
+  "seats": [
+    {
+      "label": "Elf Priest",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Bard",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Neph Wizard",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Neph Sin",
+      "sizes": [
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Neph Channeler · Healer",
+      "sizes": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Elf Druid · Healer",
+      "sizes": [
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Warlock",
+      "sizes": [
+        10
+      ]
+    },
+    {
+      "label": "Neph Channeler · Healer",
+      "sizes": [
+        10
+      ]
+    },
+    {
+      "label": "Prelate",
+      "sizes": [
+        10
+      ]
+    },
+    {
+      "label": "Human Crusader",
+      "sizes": [
+        10
+      ]
+    }
+  ],
+  "strategy": "Depends on whether we have a bard.\nWith a bard: prestun twice (and immune), rush in, target 1 priest and 1 DPS. Most DPS should go on the enemy DPS, not the priest (prioritize DPS that is not a Neph mage).\nWithout a bard: go in slowly, calling targets and switching them by the debuffs' downtime (once they're up, change).\nDebuff → debuff → hit → Shadowmantle, so they can't strip all the debuffs before the target dies."
+}
