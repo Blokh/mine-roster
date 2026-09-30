@@ -1,0 +1,82 @@
+{
+  "createdAt": 4,
+  "name": "Dynamic",
+  "description": "Flexible group: the priests are fixed, every other seat picks its own class.",
+  "strategy": "5-man: 1 Priest, the other 5 seats are any class.\n10-man: 2 Priests, the other 8 seats are any class.\nPick Dynamic as your class if you'll fill whatever the group is missing.",
+  "seats": [
+    {
+      "label": "Priest",
+      "sizes": [
+        5,
+        10
+      ]
+    },
+    {
+      "label": "Priest",
+      "sizes": [
+        10
+      ]
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        5,
+        10
+      ],
+      "pick": true
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        5,
+        10
+      ],
+      "pick": true
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        5,
+        10
+      ],
+      "pick": true
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        5,
+        10
+      ],
+      "pick": true
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        5,
+        10
+      ],
+      "pick": true
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        10
+      ],
+      "pick": true
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        10
+      ],
+      "pick": true
+    },
+    {
+      "label": "Dynamic \u00b7 pick your class",
+      "sizes": [
+        10
+      ],
+      "pick": true
+    }
+  ]
+}

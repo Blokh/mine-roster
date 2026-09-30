@@ -4,20 +4,23 @@ service cloud.firestore {
     // Group builds can be created once (seed.mjs) and never changed from the page; edit them in the Firebase console.
     match /groups/{id} {
       allow read: if true;
-      allow create: if id in ['meat', 'dot-snare', 'high-resist-caster'];
+      allow create: if id in ['meat', 'dot-snare', 'high-resist-caster', 'dynamic'];
       allow update, delete: if false;
     }
     // A game roster with nicknames and no login: anyone can join or leave, but only well-formed rows get in.
     match /signups/{id} {
       allow read, delete: if true;
       allow update: if false;
-      allow create: if request.resource.data.keys().hasOnly(['timeline', 'section', 'groupId', 'seat', 'role', 'player', 'createdAt'])
+      allow create: if request.resource.data.keys().hasOnly(['timeline', 'section', 'groupId', 'seat', 'role', 'player', 'cls', 'createdAt'])
         && request.resource.data.timeline in ['western', 'kharsoom', 'pandemonium', 'ecklund']
         && request.resource.data.section in [3, 5, 10]
-        && request.resource.data.groupId in ['meat', 'dot-snare', 'high-resist-caster']
+        && request.resource.data.groupId in ['meat', 'dot-snare', 'high-resist-caster', 'dynamic']
         && request.resource.data.seat is int && request.resource.data.seat >= 0 && request.resource.data.seat < 20
         && request.resource.data.role in ['primary', 'secondary']
         && request.resource.data.player is string && request.resource.data.player.size() > 0 && request.resource.data.player.size() <= 30
+        && (!('cls' in request.resource.data) || request.resource.data.cls in ['Dynamic', 'Assassin', 'Barbarian', 'Bard', 'Channeler', 'Confessor', 'Crusader',
+              'Doomsayer', 'Druid', 'Fury', 'Huntress', 'Necromancer', 'Nightstalker', 'Prelate', 'Priest', 'Ranger', 'Scout', 'Sentinel', 'Templar',
+              'Thief', 'Warlock', 'Warrior', 'Wizard'])
         && request.resource.data.createdAt is int;
     }
   }

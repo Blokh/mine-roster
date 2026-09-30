@@ -8,6 +8,7 @@ const value = (v) =>
   Array.isArray(v) ? { arrayValue: { values: v.map(value) } }
   : typeof v === 'number' ? (Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v })
   : typeof v === 'string' ? { stringValue: v }
+  : typeof v === 'boolean' ? { booleanValue: v }
   : { mapValue: { fields: Object.fromEntries(Object.entries(v).map(([k, x]) => [k, value(x)])) } };
 
 for (const file of readdirSync('data/groups')) {
