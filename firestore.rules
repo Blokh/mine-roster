@@ -10,8 +10,11 @@ service cloud.firestore {
     // A game roster with nicknames and no login: anyone can join or leave, but only well-formed rows get in.
     match /signups/{id} {
       allow read, delete: if true;
-      allow update: if false;
-      allow create: if request.resource.data.keys().hasOnly(['timeline', 'section', 'groupId', 'seat', 'role', 'player', 'cls', 'createdAt'])
+      // Renaming: only the nickname (and the browser id that claims it) may change.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['player', 'pid'])
+        && request.resource.data.player is string && request.resource.data.player.size() > 0 && request.resource.data.player.size() <= 30
+        && (!('pid' in request.resource.data) || (request.resource.data.pid is string && request.resource.data.pid.size() <= 64));
+      allow create: if request.resource.data.keys().hasOnly(['timeline', 'section', 'groupId', 'seat', 'role', 'player', 'pid', 'cls', 'createdAt'])
         && request.resource.data.timeline in ['western', 'kharsoom', 'pandemonium', 'ecklund']
         && request.resource.data.section in [3, 5, 10]
         && request.resource.data.groupId in ['meat', 'dot-snare', 'high-resist-caster', 'dynamic']
@@ -21,6 +24,7 @@ service cloud.firestore {
         && (!('cls' in request.resource.data) || request.resource.data.cls in ['Dynamic', 'Assassin', 'Barbarian', 'Bard', 'Channeler', 'Confessor', 'Crusader',
               'Doomsayer', 'Druid', 'Fury', 'Huntress', 'Necromancer', 'Nightstalker', 'Prelate', 'Priest', 'Ranger', 'Scout', 'Sentinel', 'Templar',
               'Thief', 'Warlock', 'Warrior', 'Wizard'])
+        && (!('pid' in request.resource.data) || (request.resource.data.pid is string && request.resource.data.pid.size() <= 64))
         && request.resource.data.createdAt is int;
     }
   }

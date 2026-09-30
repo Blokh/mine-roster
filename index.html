@@ -305,6 +305,46 @@ function HowItWorks() {
 const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const ROLE = { primary: 'Primary', secondary: 'Secondary' };
 
+// This browser is the player's identity: sign-ups carry its id, so a nickname change follows them.
+const PID = (() => {
+  try {
+    let id = localStorage.getItem('mine-roster:device');
+    if (!id) { id = crypto.randomUUID(); localStorage.setItem('mine-roster:device', id); }
+    return id;
+  } catch { return ''; }
+})();
+// Older sign-ups have no browser id; those still match by nickname.
+const own = (s, name) => (s.pid ? s.pid === PID : !!name && same(s.player, name));
+
+// Up to 10 suggestions under the input (above it near the bottom of the screen); prefix matches first.
+function ClassPicker({ id, value, onChange }) {
+  const [open, setOpen] = useState(true);
+  const [active, setActive] = useState(0);
+  const [up, setUp] = useState(false);
+  const q = value.trim().toLowerCase();
+  const options = [...CLASSES.filter((c) => c.toLowerCase().startsWith(q)), ...CLASSES.filter((c) => !c.toLowerCase().startsWith(q) && c.toLowerCase().includes(q))].slice(0, 10);
+  const show = open && options.length > 0 && !(options.length === 1 && options[0] === value);
+  const pick = (c) => { onChange(c); setOpen(false); };
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); setOpen(true); setActive((a) => (a + (e.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length); }
+    else if (e.key === 'Enter' && show) { e.preventDefault(); pick(options[Math.min(active, options.length - 1)]); }
+    else if (e.key === 'Escape') setOpen(false);
+  };
+  return html`
+    <div className="relative flex-1">
+      <${Input} id=${id} autoFocus autoComplete="off" role="combobox" aria-expanded=${show} aria-controls=${id + '-list'} aria-autocomplete="list"
+        placeholder="Start typing: Bard, Warlock, Dynamic…" value=${value} onKeyDown=${onKey} onBlur=${() => setOpen(false)}
+        onFocus=${(e) => { setOpen(true); setUp(e.target.getBoundingClientRect().bottom + 340 > window.innerHeight && e.target.getBoundingClientRect().top > 340); }}
+        onInput=${(e) => { onChange(e.target.value); setOpen(true); setActive(0); }} />
+      ${show && html`
+        <ul id=${id + '-list'} role="listbox" className=${cn('absolute inset-x-0 z-30 overflow-hidden rounded-md border bg-card py-1 shadow-lg', up ? 'bottom-full mb-1' : 'top-full mt-1')}>
+          ${options.map((c, i) => html`
+            <li key=${c} role="option" aria-selected=${i === active} onMouseDown=${(e) => { e.preventDefault(); pick(c); }} onMouseEnter=${() => setActive(i)}
+              className=${cn('cursor-pointer px-3 py-1.5 text-sm', i === active && 'bg-accent text-primary', c === 'Dynamic' && 'font-semibold')}>${c}</li>`)}
+        </ul>`}
+    </div>`;
+}
+
 function Chip({ entry, mine, onLeave }) {
   const secondary = entry.role === 'secondary';
   return html`
@@ -324,7 +364,7 @@ function Seat({ seat, entries, name, free, blockPrimary, onJoin, onLeave }) {
   const match = CLASSES.find((c) => same(c, cls));
   const join = (role) => (seat.pick ? setPicking(role) : onJoin(role));
   const confirm = async (e) => { e.preventDefault(); if (match && await onJoin(picking, match)) { setPicking(''); setCls(''); } };
-  const here = name && entries.some((e) => same(e.player, name));
+  const here = name && entries.some((e) => own(e, name));
   const canPrimary = free.includes('primary') && n < MAX_PER_SEAT && !blockPrimary;
   const canSecondary = free.includes('secondary') && secondaries.length < MAX_SECONDARY;
   const why = !name ? 'Enter your nickname first'
@@ -357,7 +397,7 @@ function Seat({ seat, entries, name, free, blockPrimary, onJoin, onLeave }) {
         <form onSubmit=${confirm} className="flex flex-col gap-2 rounded-lg border bg-muted/40 p-3">
           <${Label} htmlFor=${clsId}>Class you'll play as ${ROLE[picking].toLowerCase()}<//>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <${Input} id=${clsId} list="sb-classes" autoFocus autoComplete="off" placeholder="Start typing: Bard, Warlock, Dynamic…" value=${cls} onInput=${(e) => setCls(e.target.value)} />
+            <${ClassPicker} id=${clsId} value=${cls} onChange=${setCls} />
             <div className="flex gap-2">
               <${Button} type="submit" size="sm" className="h-9 flex-1 sm:flex-none" disabled=${!match}>Join<//>
               <${Button} type="button" size="sm" variant="ghost" className="h-9" onClick=${() => { setPicking(''); setCls(''); }}>Cancel<//>
@@ -366,11 +406,11 @@ function Seat({ seat, entries, name, free, blockPrimary, onJoin, onLeave }) {
           <span className="text-xs text-muted-foreground">${cls && !match ? 'Pick a class from the list.' : 'Pick Dynamic if you will play whatever the group needs.'}</span>
         </form>`}
       ${primaries.length > 0 && html`
-        <div className="flex flex-wrap gap-1.5">${primaries.map((e) => html`<${Chip} key=${e.id} entry=${e} mine=${same(e.player, name)} onLeave=${onLeave} />`)}</div>`}
+        <div className="flex flex-wrap gap-1.5">${primaries.map((e) => html`<${Chip} key=${e.id} entry=${e} mine=${own(e, name)} onLeave=${onLeave} />`)}</div>`}
       ${secondaries.length > 0 && html`
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Secondary</span>
-          ${secondaries.map((e) => html`<${Chip} key=${e.id} entry=${e} mine=${same(e.player, name)} onLeave=${onLeave} />`)}
+          ${secondaries.map((e) => html`<${Chip} key=${e.id} entry=${e} mine=${own(e, name)} onLeave=${onLeave} />`)}
         </div>`}
     </li>`;
 }
@@ -378,15 +418,15 @@ function Seat({ seat, entries, name, free, blockPrimary, onJoin, onLeave }) {
 const seatsFor = (group, size) => (group.seats || []).map((s, i) => ({ ...s, i })).filter((s) => s.sizes.includes(size)).slice(0, MINE_CAP[size]);
 
 function GroupRoster({ group, section, signups, name, blockPrimary, api }) {
-  const mine = name ? signups.filter((s) => same(s.player, name)) : [];
+  const mine = name ? signups.filter((s) => own(s, name)) : [];
   const free = ['primary', 'secondary'].filter((r) => !mine.some((s) => (s.role || 'primary') === r));
   const seats = seatsFor(group, section.size);
   const covered = seats.filter((s) => signups.filter((e) => e.seat === s.i && e.role !== 'secondary').length >= MIN_PER_SEAT).length;
   return html`
-    <details className="rounded-lg border" open>
-      <summary className="flex flex-col gap-2 px-3 py-3 sm:px-4">
+    <details className="overflow-hidden rounded-lg border-2 border-primary/25 bg-background/40" open>
+      <summary className="flex flex-col gap-2 border-b border-primary/25 bg-accent/70 px-3 py-3 sm:px-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="flex items-center gap-1.5 font-semibold"><${Chevron} />${group.name}</span>
+          <span className="flex items-center gap-1.5 font-semibold text-primary" style=${{ fontFamily: 'Cinzel, Georgia, serif', fontSize: '1.05rem' }}><${Chevron} />${group.name}</span>
           <${Badge} variant=${covered === seats.length ? 'success' : 'secondary'}>${covered}/${seats.length} seats covered<//>
         </div>
         ${name && html`
@@ -399,7 +439,7 @@ function GroupRoster({ group, section, signups, name, blockPrimary, api }) {
             })}
           </div>`}
       </summary>
-      <div className="flex flex-col gap-3 border-t px-3 pb-2 pt-3 sm:px-4">
+      <div className="flex flex-col gap-3 px-3 pb-2 pt-3 sm:px-4">
         ${group.description && html`<p className="text-sm text-muted-foreground">${group.description}</p>`}
         ${group.strategy && html`
           <details className="rounded-lg border bg-muted/40 px-3 py-2">
@@ -437,7 +477,7 @@ function Section({ section, groups, signups, name, blockPrimary, api }) {
         ${blockPrimary && html`<p className="text-xs font-medium text-warn">${blockPrimary} You can still join here as a secondary.</p>`}
         <p className="text-sm text-muted-foreground">Sign up in as many groups as you like: a Primary, a Secondary, or both in each.</p>
       <//>
-      <${CardContent} className="flex flex-col gap-2">
+      <${CardContent} className="flex flex-col gap-8">
         ${allowed.map((g) => html`<${GroupRoster} key=${g.id} group=${g} section=${section} name=${name} blockPrimary=${blockPrimary} api=${api}
           signups=${signups.filter((s) => s.groupId === g.id)} />`)}
       <//>
@@ -500,7 +540,6 @@ const loadReady = () => { try { return JSON.parse(localStorage.getItem(READY_KEY
 function App() {
   const NICK_KEY = 'mine-roster:nickname';
   const [name, setNameState] = useState(() => { try { return localStorage.getItem(NICK_KEY) || ''; } catch { return ''; } });
-  const setName = (v) => { setNameState(v); try { localStorage.setItem(NICK_KEY, v); } catch {} };
   const [ready, setReadyState] = useState(loadReady);
   const setReady = (v) => { setReadyState(v); try { localStorage.setItem(READY_KEY, JSON.stringify(v)); } catch {} };
   const [tab, setTab] = useState(TL[0].id);
@@ -526,7 +565,7 @@ function App() {
   }, []);
 
 
-  const mySignups = name ? signups.filter((s) => same(s.player, name)) : [];
+  const mySignups = name ? signups.filter((s) => own(s, name)) : [];
   // A primary in a section that runs at the same time blocks primaries here.
   const blockFor = (tl, section) => {
     const clash = section.overlaps.find((o) => mySignups.some((s) => s.timeline === tl.id && s.section === o.size && s.role !== 'secondary'));
@@ -538,11 +577,16 @@ function App() {
     setError('');
     try { await fn(); return true; } catch (e) { setError(errorText(e)); return false; }
   };
+  const setName = (v) => {
+    const mine = signups.filter((s) => own(s, name) && (s.player !== v || (PID && s.pid !== PID)));
+    setNameState(v); try { localStorage.setItem(NICK_KEY, v); } catch {}
+    if (db) run(async () => { for (const s of mine) await db.doc('signups/' + s.id).update({ player: v, ...(PID && { pid: PID }) }); });
+  };
   const api = {
     // ponytail: limits are checked client-side, so two people joining the same seat at the same instant could make it 4; fine for a guild roster.
     join: async (section, group, seat, role, cls) => {
       const inGroup = signups.filter((s) => s.timeline === section.tl && s.section === section.size && s.groupId === group.id);
-      const mine = inGroup.filter((s) => same(s.player, name));
+      const mine = inGroup.filter((s) => own(s, name));
       const onSeat = inGroup.filter((s) => s.seat === seat);
       if (mine.some((s) => (s.role || 'primary') === role)) { setError(`You already have a ${role} spot in this group.`); return false; }
       if (role === 'primary' && onSeat.filter((s) => s.role !== 'secondary').length >= MAX_PER_SEAT) { setError('That seat just filled up. You can still join as a secondary.'); return false; }
@@ -552,7 +596,7 @@ function App() {
         if (!(await askReady(label))) return false;
         setReady([...ready, label]);
       }
-      return run(() => db.collection('signups').add({ timeline: section.tl, section: section.size, groupId: group.id, seat, role, player: name, ...(cls && { cls }), createdAt: Date.now() }));
+      return run(() => db.collection('signups').add({ timeline: section.tl, section: section.size, groupId: group.id, seat, role, player: name, ...(PID && { pid: PID }), ...(cls && { cls }), createdAt: Date.now() }));
     },
     leave: (id) => run(() => db.doc('signups/' + id).delete()),
   };
@@ -591,7 +635,7 @@ function App() {
         <//><//>`}
 
       ${db && html`
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-10">
           ${!single && html`<p className="text-sm text-muted-foreground">This timeline mixes mine sizes, so it has ${tl.sections.length} sections. Each section covers every mine of that size in this timeline.</p>`}
           ${tl.sections.map((sec) => {
             const section = { ...sec, tl: tl.id, key: `${tl.id}-${sec.size}` };
@@ -600,7 +644,6 @@ function App() {
           })}
         </div>`}
 
-      <datalist id="sb-classes">${CLASSES.map((c) => html`<option key=${c} value=${c} />`)}</datalist>
       <${ReadyDialog} ask=${ask} />
     </main>`;
 }
